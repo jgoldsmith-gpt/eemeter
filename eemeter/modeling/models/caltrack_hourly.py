@@ -235,8 +235,8 @@ class CaltrackHourlyModel(object):
         self.params = {
             "coefficients": self.model_res.params.to_dict(),
             "formula": self.formula,
-            "cdd_bp": self.fit_bp_cdd,
-            "hdd_bp": self.fit_bp_hdd,
+            "cdd_bp": 65.0,
+            "hdd_bp": 65.0,
             "X_design_info": self.X.design_info,
         }
 

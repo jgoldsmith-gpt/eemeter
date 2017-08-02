@@ -12,7 +12,7 @@ from eemeter.modeling.formatters import (
     ModelDataFormatter,
     ModelDataBillingFormatter,
 )
-from eemeter.modeling.models import CaltrackMonthlyModel, CaltrackDailyModel
+from eemeter.modeling.models import CaltrackMonthlyModel, CaltrackDailyModel,  MovingHourlyAverage
 from eemeter.modeling.split import SplitModeledEnergyTrace
 from eemeter.io.serializers import (
     deserialize_meter_input,
@@ -216,11 +216,10 @@ class EnergyEfficiencyMeter(object):
                 if isinstance(custom_model_class, string_types):
                     ModelClass = {
                         f.__name__: f
-                        for f in [CaltrackMonthlyModel]
+                        for f in [CaltrackMonthlyModel, MovingHourlyAverage]
                     }[custom_model_class]
                 else:
                     ModelClass = custom_model_class
-
                 if custom_model_kwargs is None:
                     # assume default args don't apply since using custom meter class
                     model_kwargs = {}
@@ -453,6 +452,7 @@ class EnergyEfficiencyMeter(object):
         output["modeled_energy_trace"] = \
             serialize_split_modeled_energy_trace(modeled_trace)
 
+        #print output["modeled_energy_trace"]
         # Step 9: for each modeling period group, create derivatives
         derivatives = []
         for ((baseline_label, reporting_label),
@@ -574,6 +574,7 @@ class EnergyEfficiencyMeter(object):
 
             def subtract_value_variance_tuple(tuple1, tuple2):
                 (val1, var1), (val2, var2) = tuple1, tuple2
+                print " subtract_value_variance_tuple : " , tuple1
                 try:
                     assert val1 is not None
                     assert val2 is not None
@@ -598,7 +599,7 @@ class EnergyEfficiencyMeter(object):
                 )
 
             if baseline_model_success:
-
+                print 'baseline was success', baseline_output['model_fit']
                 if 'model_fit' in baseline_output.keys() and \
                    'model_params' in baseline_output['model_fit'] and \
                    'hdd_bp' in baseline_output['model_fit']['model_params']:
@@ -670,7 +671,7 @@ class EnergyEfficiencyMeter(object):
                     series = 'Best-fit intercept, baseline period'
                     description = '''Best-fit intercept, if any, for baseline model'''
                     value = baseline_output['model_fit']['model_params']['coefficients']['Intercept']
-
+                    print series, value
                     raw_derivatives.append({
                             'series': series,
                             'description': description,
@@ -680,7 +681,7 @@ class EnergyEfficiencyMeter(object):
                     })
 
             if reporting_model_success:
-
+                print 'reportin was success'
                 if 'model_fit' in reporting_output.keys() and \
                    'model_params' in reporting_output['model_fit'] and \
                    'hdd_bp' in reporting_output['model_fit']['model_params']:
@@ -752,7 +753,7 @@ class EnergyEfficiencyMeter(object):
                     series = 'Best-fit intercept, reporting period'
                     description = '''Best-fit intercept, if any, for reporting model'''
                     value = reporting_output['model_fit']['model_params']['coefficients']['Intercept']
-
+                    print series, value
                     raw_derivatives.append({
                             'series': series,
                             'description': description,
@@ -763,6 +764,7 @@ class EnergyEfficiencyMeter(object):
 
             if baseline_model_success and reporting_model_success \
                     and weather_normal_source_success:
+                print 'Predicting==='
                 series = 'Cumulative baseline model minus reporting model, normal year'
                 description = '''Total predicted usage according to the baseline model
                                  over the normal weather year, minus the total predicted
@@ -770,6 +772,7 @@ class EnergyEfficiencyMeter(object):
                                  weather year. Days for which normal year weather data
                                  does not exist are removed.'''
                 try:
+
                     value, variance = subtract_value_variance_tuple(
                         baseline_model.predict(annualized_daily_fixture, summed=True),
                         reporting_model.predict(annualized_daily_fixture, summed=True))
@@ -780,7 +783,9 @@ class EnergyEfficiencyMeter(object):
                         'value': [value, ],
                         'variance': [variance, ]
                     })
+                    print 'Comupted', series
                 except:
+                    print "Failed derviateds i sum"
                     _report_failed_derivative(series)
 
                 series = 'Baseline model minus reporting model, normal year'
@@ -799,7 +804,9 @@ class EnergyEfficiencyMeter(object):
                         'value': value.tolist(),
                         'variance': variance.tolist()
                     })
+                    print 'Comupted', series
                 except:
+                    print "Failed derviateds i Non SUm"
                     _report_failed_derivative(series)
 
             if baseline_model_success:

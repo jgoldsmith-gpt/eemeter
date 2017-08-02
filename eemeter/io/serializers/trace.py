@@ -52,6 +52,7 @@ class BaseSerializer(object):
             index=index,
             columns=["value", "estimated"],
         )
+        #print df.value
         df.value = df.value.astype(float)
         df.estimated = df.estimated.astype(bool)
         return df

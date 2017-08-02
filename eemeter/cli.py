@@ -10,7 +10,8 @@ import numpy as np
 from eemeter.structures import EnergyTrace
 from eemeter.io.serializers import ArbitraryStartSerializer
 from eemeter.ee.meter import EnergyEfficiencyMeter
-
+from eemeter.modeling.formatters import ModelDataFormatter
+from eemeter.modeling.models.hrly_avg import MovingHourlyAverage
 
 @click.group()
 def cli():
@@ -89,6 +90,7 @@ date_readers = [
     date_reader('%Y-%m-%d %H:%M:%S'),
     date_reader('%Y-%m-%dT%H:%M:%S'),
     date_reader('%Y-%m-%dT%H:%M:%SZ'),
+    date_reader('%Y-%m-%d %H:%M:%S+00:00')
 ]
 
 
@@ -177,6 +179,50 @@ def run_meter(project, trace_object):
           format(rep, rep_confint[0], rep_confint[1]))
 
 
+def run_natgrid_meter(project, trace_object):
+    print("\n\nRunning a meter for %s %s" % (
+        trace_object.trace_id, trace_object.interpretation)
+    )
+    meter_input = serialize_meter_input(
+        trace_object,
+        project['zipcode'],
+        project['project_start'],
+        project['project_end']
+    )
+    ee = EnergyEfficiencyMeter()
+    formatter = ('ModelDataFormatter', {'freq_str' : 'H'})
+    weather_source=None
+    model = ( 'MovingHourlyAverage', {})
+    meter_output = ee.evaluate(meter_input,
+                               formatter=formatter,
+                               model=model)
+
+    #print meter_output['derivatives']
+    # Compute and output the annualized weather normal
+
+    series_name = \
+        'Cumulative baseline model minus reporting model, normal year'
+    awn = [i['value'][0] for i in meter_output['derivatives']
+           if i['series'] == series_name][0]
+    awn_var = [i['variance'][0] for i in meter_output['derivatives']
+               if i['series'] == series_name][0]
+    awn_confint = stats.norm.interval(0.68, loc=awn, scale=np.sqrt(awn_var))
+    print("Normal year savings estimate:")
+    print("  {:f}\n  68% confidence interval: ({:f}, {:f})".
+          format(awn, awn_confint[0], awn_confint[1]))
+
+    # Compute and output the weather normalized reporting period savings
+    series_name = \
+        'Cumulative baseline model minus observed, reporting period'
+    rep = [i['value'][0] for i in meter_output['derivatives']
+           if i['series'] == series_name][0]
+    rep_var = [i['variance'][0] for i in meter_output['derivatives']
+               if i['series'] == series_name][0]
+    rep_confint = stats.norm.interval(0.68, loc=rep, scale=np.sqrt(rep_var))
+    print("Reporting period savings estimate:")
+    print("  {:f}\n  68% confidence interval: ({:f}, {:f})".
+          format(rep, rep_confint[0], rep_confint[1]))
+
 def _analyze(inputs_path):
     projects = read_csv(os.path.join(inputs_path, 'projects.csv'))
     traces = read_csv(os.path.join(inputs_path, 'traces.csv'))
@@ -196,6 +242,24 @@ def _analyze(inputs_path):
                 run_meter(project, trace_object)
 
 
+def natgrid_analyze(inputs_path):
+    projects = read_csv(os.path.join(inputs_path, 'projects.csv'))
+    traces = read_csv(os.path.join(inputs_path, 'traces.csv'))
+
+    for row in traces:
+        row['start'] = flexible_date_reader(row['start'])
+
+    for row in projects:
+        row['project_start'] = flexible_date_reader(row['project_start'])
+        row['project_end'] = flexible_date_reader(row['project_end'])
+
+    trace_objects = build_traces(traces)
+
+    for project in projects:
+        for trace_object in trace_objects:
+            if trace_object.trace_id == project['project_id']:
+                run_natgrid_meter(project, trace_object)
+
 @cli.command()
 def sample():
     path = os.path.realpath(__file__)
@@ -211,3 +275,9 @@ def sample():
 @click.argument('inputs_path', type=click.Path(exists=True))
 def analyze(inputs_path):
     _analyze(inputs_path)
+
+
+@cli.command()
+@click.argument('inputs_path', type=click.Path(exists=True))
+def natgrid(inputs_path):
+    natgrid_analyze(inputs_path)
