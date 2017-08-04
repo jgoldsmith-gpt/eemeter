@@ -18,17 +18,22 @@ class MovingHourlyAverage(object):
         weekday_hrly_sum = defaultdict(float)
         weekend_hrly_sum = defaultdict(float)
 
+
         weekend_hrly_datapoints = defaultdict(int)
         weekday_hrly_datapoints = defaultdict(int)
         df = df[np.isfinite(df['value'])]
+
+
+
         for index, row in df.iterrows():
             day_of_week, hour = index.dayofweek, index.hour
             if day_of_week < 5:
                 weekday_hrly_datapoints[str(hour)] += 1
-                weekday_hrly_sum[str(hour)] += float(row['value'])
+                weekday_hrly_sum[ str(hour)] += float(row['value'])
             else:
                 weekend_hrly_datapoints[str(hour)] += 1
                 weekend_hrly_sum[str(hour)] += float(row['value'])
+
 
         for key, value in weekend_hrly_sum.items():
             denominator = weekend_hrly_datapoints[key]
@@ -79,9 +84,12 @@ class MovingHourlyAverage(object):
         for index, row in df.iterrows():
             day_of_week, hour = index.dayofweek, index.hour
             if day_of_week < 5:
-                predicted.append(self.weekday_hrly_avg[str(hour)])
+                pred_value = self.weekday_hrly_avg[str(hour)]
+                predicted.append(pred_value)
             else:
-                predicted.append(self.weekday_hrly_avg[str(hour)])
+                pred_value = self.weekend_hrly_avg[str(hour)]
+
+                predicted.append(pred_value)
 
 
         prediction = pd.Series(predicted, index=df.index)
